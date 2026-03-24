@@ -1,4 +1,4 @@
-from aiohttp import web
+from comfy_web.compat import web
 from typing import Optional
 from folder_paths import folder_names_and_paths, get_directory_by_type
 from api_server.services.terminal_service import TerminalService

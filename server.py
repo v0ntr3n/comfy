@@ -1,3 +1,6 @@
+import aiohttp
+from comfy_web.compat import web
+
 import os
 import sys
 import asyncio
@@ -20,8 +23,7 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 from io import BytesIO
 
-import aiohttp
-from aiohttp import web
+
 import logging
 
 import mimetypes
@@ -249,7 +251,7 @@ class PromptServer():
 
         self.on_prompt_handlers = []
 
-        @routes.get('/ws')
+        @routes.get('/ws', websocket=True)
         async def websocket_handler(request):
             ws = web.WebSocketResponse()
             await ws.prepare(request)
@@ -1220,8 +1222,6 @@ class PromptServer():
         await self.start_multi_address([(address, port)], call_on_start=call_on_start)
 
     async def start_multi_address(self, addresses, call_on_start=None, verbose=True):
-        runner = web.AppRunner(self.app, access_log=None)
-        await runner.setup()
         ssl_ctx = None
         scheme = "http"
         if args.tls_keyfile and args.tls_certfile:
@@ -1232,11 +1232,18 @@ class PromptServer():
 
         if verbose:
             logging.info("Starting server\n")
+        self._servers = []
         for addr in addresses:
             address = addr[0]
             port = addr[1]
-            site = web.TCPSite(runner, address, port, ssl_context=ssl_ctx)
-            await site.start()
+            server = await self.app.sanic_app.create_server(
+                host=address,
+                port=port,
+                ssl=ssl_ctx,
+                access_log=False,
+                return_asyncio_server=True,
+            )
+            self._servers.append(server)
 
             if not hasattr(self, 'address'):
                 self.address = address #TODO: remove this

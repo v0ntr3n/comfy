@@ -1,6 +1,6 @@
 """Cache control middleware for ComfyUI server"""
 
-from aiohttp import web
+from comfy_web.compat import web
 from typing import Callable, Awaitable
 
 # Time in seconds

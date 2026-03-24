@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import folder_paths
 import glob
-from aiohttp import web
+from comfy_web.compat import web
 import json
 import logging
 from functools import lru_cache

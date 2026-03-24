@@ -7,7 +7,7 @@ import urllib.parse
 import uuid
 from typing import Any
 
-from aiohttp import web
+from comfy_web.compat import web
 from pydantic import ValidationError
 
 import folder_paths

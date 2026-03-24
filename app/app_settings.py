@@ -1,6 +1,6 @@
 import os
 import json
-from aiohttp import web
+from comfy_web.compat import web
 import logging
 
 

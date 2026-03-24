@@ -7,7 +7,7 @@ import glob
 import shutil
 import logging
 import tempfile
-from aiohttp import web
+from comfy_web.compat import web
 from urllib import parse
 from comfy.cli_args import args
 import folder_paths

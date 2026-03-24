@@ -1,0 +1,2 @@
+from .compat import web
+

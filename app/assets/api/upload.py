@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import Callable
 
-from aiohttp import web
+from comfy_web.compat import web
 
 import folder_paths
 from app.assets.api.schemas_in import ParsedUpload, UploadError
@@ -43,68 +43,52 @@ async def parse_multipart_upload(
             415, "UNSUPPORTED_MEDIA_TYPE", "Use multipart/form-data for uploads."
         )
 
-    reader = await request.multipart()
+    post = await request.post()
 
-    file_present = False
+    file_field = post.get("file")
+    file_present = file_field is not None
     file_client_name: str | None = None
-    tags_raw: list[str] = []
-    provided_name: str | None = None
-    user_metadata_raw: str | None = None
-    provided_hash: str | None = None
+    tags_raw = request._request.form.getlist("tags") if request._request.form else []
+    provided_name = post.get("name")
+    user_metadata_raw = post.get("user_metadata")
+    provided_hash = None
     provided_hash_exists: bool | None = None
-    provided_mime_type: str | None = None
-    provided_preview_id: str | None = None
+    provided_mime_type = post.get("mime_type")
+    provided_preview_id = post.get("preview_id")
+
+    if "id" in post:
+        raise UploadError(
+            400,
+            "UNSUPPORTED_FIELD",
+            "Client-provided 'id' is not supported. Asset IDs are assigned by the server.",
+        )
+
+    hash_value = post.get("hash")
+    if hash_value:
+        try:
+            provided_hash = normalize_and_validate_hash(str(hash_value).strip().lower())
+        except Exception:
+            raise UploadError(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
+        try:
+            provided_hash_exists = check_hash_exists(provided_hash)
+        except Exception as e:
+            logging.exception("check_hash_exists failed for hash=%s: %s", provided_hash, e)
+            raise UploadError(
+                500,
+                "HASH_CHECK_FAILED",
+                "Backend error while checking asset hash.",
+            )
 
     file_written = 0
     tmp_path: str | None = None
 
-    while True:
-        field = await reader.next()
-        if field is None:
-            break
+    if file_present:
+        file_client_name = (file_field.filename or "").strip()
+        file_body = file_field.file.read()
+        file_written = len(file_body)
+        file_field.file.seek(0)
 
-        fname = getattr(field, "name", "") or ""
-
-        if fname == "hash":
-            try:
-                s = ((await field.text()) or "").strip().lower()
-            except Exception:
-                raise UploadError(
-                    400, "INVALID_HASH", "hash must be like 'blake3:<hex>'"
-                )
-
-            if s:
-                provided_hash = normalize_and_validate_hash(s)
-                try:
-                    provided_hash_exists = check_hash_exists(provided_hash)
-                except Exception as e:
-                    logging.exception(
-                        "check_hash_exists failed for hash=%s: %s", provided_hash, e
-                    )
-                    raise UploadError(
-                        500,
-                        "HASH_CHECK_FAILED",
-                        "Backend error while checking asset hash.",
-                    )
-
-        elif fname == "file":
-            file_present = True
-            file_client_name = (field.filename or "").strip()
-
-            if provided_hash and provided_hash_exists is True:
-                # Hash exists - drain file but don't write to disk
-                try:
-                    while True:
-                        chunk = await field.read_chunk(8 * 1024 * 1024)
-                        if not chunk:
-                            break
-                        file_written += len(chunk)
-                except Exception:
-                    raise UploadError(
-                        500, "UPLOAD_IO_ERROR", "Failed to receive uploaded file."
-                    )
-                continue
-
+        if not (provided_hash and provided_hash_exists is True):
             uploads_root = os.path.join(folder_paths.get_temp_directory(), "uploads")
             unique_dir = os.path.join(uploads_root, uuid.uuid4().hex)
             os.makedirs(unique_dir, exist_ok=True)
@@ -112,34 +96,12 @@ async def parse_multipart_upload(
 
             try:
                 with open(tmp_path, "wb") as f:
-                    while True:
-                        chunk = await field.read_chunk(8 * 1024 * 1024)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        file_written += len(chunk)
+                    f.write(file_body)
             except Exception:
                 delete_temp_file_if_exists(tmp_path)
                 raise UploadError(
                     500, "UPLOAD_IO_ERROR", "Failed to receive and store uploaded file."
                 )
-
-        elif fname == "tags":
-            tags_raw.append((await field.text()) or "")
-        elif fname == "name":
-            provided_name = (await field.text()) or None
-        elif fname == "user_metadata":
-            user_metadata_raw = (await field.text()) or None
-        elif fname == "id":
-            raise UploadError(
-                400,
-                "UNSUPPORTED_FIELD",
-                "Client-provided 'id' is not supported. Asset IDs are assigned by the server.",
-            )
-        elif fname == "mime_type":
-            provided_mime_type = ((await field.text()) or "").strip() or None
-        elif fname == "preview_id":
-            provided_preview_id = ((await field.text()) or "").strip() or None
 
     if not file_present and not (provided_hash and provided_hash_exists):
         raise UploadError(

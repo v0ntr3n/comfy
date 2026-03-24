@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiohttp import web
+from comfy_web.compat import web
 
 from typing import TYPE_CHECKING, TypedDict
 if TYPE_CHECKING:

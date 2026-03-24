@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Dict, TypedDict, Optional
-from aiohttp import web
+from comfy_web.compat import web
 from importlib.metadata import version
 
 import requests

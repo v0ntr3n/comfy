@@ -8,7 +8,7 @@ import logging
 import folder_paths
 import glob
 import comfy.utils
-from aiohttp import web
+from comfy_web.compat import web
 from PIL import Image
 from io import BytesIO
 from folder_paths import map_legacy, filter_files_extensions, filter_files_content_types

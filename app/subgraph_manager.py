@@ -4,7 +4,7 @@ from typing import TypedDict
 import os
 import folder_paths
 import glob
-from aiohttp import web
+from comfy_web.compat import web
 import hashlib
 
 

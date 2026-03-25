@@ -1,10 +1,10 @@
 comfyui-frontend-package
 comfyui-workflow-templates
 comfyui-embedded-docs
-# torch
-# torchsde
-# torchvision
-# torchaudio
+torch
+torchsde
+torchvision
+torchaudio
 numpy
 einops
 transformers
@@ -36,3 +36,4 @@ pydantic
 pydantic-settings
 PyOpenGL
 glfw
+comfyui_manager

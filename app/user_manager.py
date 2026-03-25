@@ -181,7 +181,9 @@ class UserManager():
                 return web.Response(status=403, text="Invalid directory")
 
             if not os.path.exists(path):
-                return web.Response(status=404, text="Directory not found")
+                # Frontend callers expect empty results for not-yet-created
+                # folders like "workflows" and "subgraphs" on fresh installs.
+                return web.json_response([])
 
             recurse = request.rel_url.query.get('recurse', '').lower() == "true"
             full_info = request.rel_url.query.get('full_info', '').lower() == "true"

@@ -16,6 +16,11 @@ from sanic.response import HTTPResponse
 from sanic.response import file as sanic_file
 from sanic.response import json as sanic_json
 
+try:
+    from aiohttp import web_response as aiohttp_web_response
+except Exception:  # pragma: no cover - aiohttp should normally be available
+    aiohttp_web_response = None
+
 
 def _translate_path(path: str) -> str:
     def repl(match: re.Match[str]) -> str:
@@ -67,6 +72,32 @@ class UploadedFile:
         self.content_type = getattr(sanic_file, "type", None)
 
 
+class _TransportProxy:
+    def __init__(self, sanic_request):
+        self._request = sanic_request
+
+    def get_extra_info(self, name: str, default: Any = None):
+        transport = getattr(self._request, "transport", None)
+        if transport is not None and hasattr(transport, "get_extra_info"):
+            value = transport.get_extra_info(name, default)
+            return default if value is None else value
+
+        if name == "peername":
+            conn_info = getattr(self._request, "conn_info", None)
+            peername = getattr(conn_info, "peername", None)
+            if peername is not None:
+                return peername
+
+            host = getattr(self._request, "remote_addr", None)
+            if host is None:
+                host = getattr(self._request, "ip", None)
+            if host is not None:
+                port = getattr(self._request, "port", 0) or 0
+                return (host, port)
+
+        return default
+
+
 class Request:
     def __init__(self, sanic_request, match_info: dict[str, Any] | None = None):
         self._request = sanic_request
@@ -77,6 +108,7 @@ class Request:
         self.content_type = sanic_request.content_type
         self.query = QueryProxy(sanic_request.args)
         self.rel_url = _RelUrl(self.query)
+        self.transport = _TransportProxy(sanic_request)
         self._websocket = None
 
     async def json(self):
@@ -288,7 +320,31 @@ class Application:
 
     async def _call_handler(self, handler: Callable[..., Any], request: Request):
         result = handler(request)
-        return await self._resolve_awaitables(result)
+        resolved = await self._resolve_awaitables(result)
+        return self._normalize_response(resolved)
+
+    def _normalize_response(self, value: Any) -> Any:
+        if isinstance(value, HTTPResponse):
+            return value
+
+        if aiohttp_web_response is not None and isinstance(value, aiohttp_web_response.Response):
+            headers = dict(value.headers)
+            content_type = headers.pop("Content-Type", None) or value.content_type
+            if value.charset and content_type and "charset=" not in content_type.lower():
+                content_type = f"{content_type}; charset={value.charset}"
+
+            body = value.body
+            if body is None and value.text is not None:
+                body = value.text
+
+            return Response(
+                status=value.status,
+                body=body,
+                content_type=content_type,
+                headers=headers,
+            )
+
+        return value
 
     async def _resolve_awaitables(self, value: Any) -> Any:
         """Resolve nested awaitables (e.g. async handler returning FileResponse)."""

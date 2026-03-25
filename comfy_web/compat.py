@@ -281,15 +281,20 @@ class Application:
         self._app = Sanic(f"ComfyUI-{id(self)}")
         self.middlewares = list(middlewares or [])
         self._registered_routes: list[Any] = []
+        self._route_name_counter = 0
         if client_max_size is not None:
             self._app.config.REQUEST_MAX_SIZE = client_max_size
         self.router = _RouterProxy(self)
 
     async def _call_handler(self, handler: Callable[..., Any], request: Request):
         result = handler(request)
-        if inspect.isawaitable(result):
-            result = await result
-        return result
+        return await self._resolve_awaitables(result)
+
+    async def _resolve_awaitables(self, value: Any) -> Any:
+        """Resolve nested awaitables (e.g. async handler returning FileResponse)."""
+        while inspect.isawaitable(value):
+            value = await value
+        return value
 
     async def _dispatch(self, handler: Callable[..., Any], request: Request):
         async def run(index: int, current_request: Request):
@@ -302,11 +307,16 @@ class Application:
                 return await run(index + 1, next_request)
 
             result = middleware_handler(current_request, next_handler)
-            if inspect.isawaitable(result):
-                result = await result
-            return result
+            return await self._resolve_awaitables(result)
 
         return await run(0, request)
+
+    def _next_route_name(self, kind: str, uri: str) -> str:
+        self._route_name_counter += 1
+        sanitized_uri = uri.strip("/").replace("/", "_").replace("<", "").replace(">", "").replace(":", "_")
+        if not sanitized_uri:
+            sanitized_uri = "root"
+        return f"compat_{kind}_{sanitized_uri}_{self._route_name_counter}"
 
     def _register_route(self, route: RouteDef, prefix: str = ""):
         uri = _translate_path(prefix + route.path)
@@ -318,28 +328,47 @@ class Application:
                 request._websocket = _PreparedWebSocket(ws)
                 return await self._call_handler(route.handler, request)
 
-            self._app.add_websocket_route(websocket_handler, uri)
+            self._app.add_websocket_route(
+                websocket_handler,
+                uri,
+                name=route.kwargs.get("name") or self._next_route_name("ws", uri),
+            )
             return
 
         async def http_handler(sanic_request, **params):
             request = Request(sanic_request, params)
             return await self._dispatch(route.handler, request)
 
-        self._app.add_route(http_handler, uri, methods=[route.method])
+        self._app.add_route(
+            http_handler,
+            uri,
+            methods=[route.method],
+            name=route.kwargs.get("name") or self._next_route_name("http", uri),
+        )
 
     def add_routes(self, routes: Iterable[Any]):
         route_list = list(routes)
         self._registered_routes.extend(route_list)
         for route in route_list:
             if isinstance(route, StaticDef):
-                self._app.static(route.path, route.directory)
+                uri = _translate_path(route.path)
+                self._app.static(
+                    uri,
+                    route.directory,
+                    name=self._next_route_name("static", uri),
+                )
             else:
                 self._register_route(route)
 
     def add_subapp(self, prefix: str, subapp: "Application"):
         for route in subapp._routes:
             if isinstance(route, StaticDef):
-                self._app.static(prefix + route.path, route.directory)
+                uri = _translate_path(prefix + route.path)
+                self._app.static(
+                    uri,
+                    route.directory,
+                    name=self._next_route_name("static", uri),
+                )
             else:
                 self._register_route(route, prefix=prefix)
 

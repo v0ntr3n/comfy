@@ -55,6 +55,9 @@ def check_frontend_version():
         frontend_version_str = get_installed_frontend_version()
         frontend_version = parse_version(frontend_version_str)
         required_frontend_str = get_required_frontend_version()
+        if not required_frontend_str:
+            logging.info("ComfyUI frontend version: {}".format(frontend_version_str))
+            return
         required_frontend = parse_version(required_frontend_str)
         if frontend_version < required_frontend:
             app.logger.log_startup_warning(

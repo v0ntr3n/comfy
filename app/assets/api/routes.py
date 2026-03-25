@@ -231,7 +231,7 @@ async def list_assets_route(request: web.Request) -> web.Response:
     return web.json_response(payload.model_dump(mode="json", exclude_none=True))
 
 
-@ROUTES.get(f"/api/assets/{{id:{UUID_RE}}}")
+@ROUTES.get("/api/assets/<id:uuid>")
 @_require_assets_feature_enabled
 async def get_asset_route(request: web.Request) -> web.Response:
     """
@@ -266,7 +266,7 @@ async def get_asset_route(request: web.Request) -> web.Response:
     return web.json_response(payload.model_dump(mode="json", exclude_none=True), status=200)
 
 
-@ROUTES.get(f"/api/assets/{{id:{UUID_RE}}}/content")
+@ROUTES.get("/api/assets/<id:uuid>/content")
 @_require_assets_feature_enabled
 async def download_asset_content(request: web.Request) -> web.Response:
     disposition = request.query.get("disposition", "attachment").lower().strip()
@@ -475,7 +475,7 @@ async def upload_asset(request: web.Request) -> web.Response:
     return web.json_response(payload_out.model_dump(mode="json", exclude_none=True), status=status)
 
 
-@ROUTES.put(f"/api/assets/{{id:{UUID_RE}}}")
+@ROUTES.put("/api/assets/<id:uuid>")
 @_require_assets_feature_enabled
 async def update_asset_route(request: web.Request) -> web.Response:
     reference_id = str(uuid.UUID(request.match_info["id"]))
@@ -513,7 +513,7 @@ async def update_asset_route(request: web.Request) -> web.Response:
     return web.json_response(payload.model_dump(mode="json", exclude_none=True), status=200)
 
 
-@ROUTES.delete(f"/api/assets/{{id:{UUID_RE}}}")
+@ROUTES.delete("/api/assets/<id:uuid>")
 @_require_assets_feature_enabled
 async def delete_asset_route(request: web.Request) -> web.Response:
     reference_id = str(uuid.UUID(request.match_info["id"]))
@@ -582,7 +582,7 @@ async def get_tags(request: web.Request) -> web.Response:
     return web.json_response(payload.model_dump(mode="json", exclude_none=True))
 
 
-@ROUTES.post(f"/api/assets/{{id:{UUID_RE}}}/tags")
+@ROUTES.post("/api/assets/<id:uuid>/tags")
 @_require_assets_feature_enabled
 async def add_asset_tags(request: web.Request) -> web.Response:
     reference_id = str(uuid.UUID(request.match_info["id"]))
@@ -630,7 +630,7 @@ async def add_asset_tags(request: web.Request) -> web.Response:
     return web.json_response(payload.model_dump(mode="json", exclude_none=True), status=200)
 
 
-@ROUTES.delete(f"/api/assets/{{id:{UUID_RE}}}/tags")
+@ROUTES.delete("/api/assets/<id:uuid>/tags")
 @_require_assets_feature_enabled
 async def delete_asset_tags(request: web.Request) -> web.Response:
     reference_id = str(uuid.UUID(request.match_info["id"]))

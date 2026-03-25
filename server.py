@@ -6,6 +6,7 @@ import sys
 import asyncio
 import traceback
 import time
+import importlib
 
 import nodes
 import folder_paths
@@ -53,7 +54,9 @@ from protocol import BinaryEventTypes
 from middleware.cache_middleware import cache_control
 
 if args.enable_manager:
-    import comfyui_manager
+    comfyui_manager = sys.modules.get("comfyui_manager")
+    if comfyui_manager is None:
+        comfyui_manager = importlib.import_module("comfyui_manager")
 
 
 def _remove_sensitive_from_queue(queue: list) -> list:
@@ -1229,6 +1232,11 @@ class PromptServer():
             ssl_ctx.load_cert_chain(certfile=args.tls_certfile,
                                 keyfile=args.tls_keyfile)
             scheme = "https"
+
+        # Sanic 25+ create_server() does not run startup lifecycle hooks.
+        # Explicit startup initializes signal routing before first request.
+        if not self.app.sanic_app.state.is_started:
+            await self.app.sanic_app._startup()
 
         if verbose:
             logging.info("Starting server\n")

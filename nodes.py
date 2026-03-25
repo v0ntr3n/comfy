@@ -46,7 +46,9 @@ import latent_preview
 import node_helpers
 
 if args.enable_manager:
-    import comfyui_manager
+    comfyui_manager = sys.modules.get("comfyui_manager")
+    if comfyui_manager is None:
+        comfyui_manager = importlib.import_module("comfyui_manager")
 
 def before_node_execution():
     comfy.model_management.throw_exception_if_processing_interrupted()
